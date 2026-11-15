@@ -1,1 +1,55 @@
-"""Tests for KnowledgeBench: fact-store query benchmark."""\n\nimport pytest\n\nfrom knowledgebench import FactStore, benchmark_queries\n\n\ndef test_lookup_direct_and_via_alias():\n    store = FactStore()\n    store.add("alice", "knows", "bob")\n    store.add_alias("ali", "alice")\n    assert store.lookup("alice", "knows") == ["bob"]\n    assert store.lookup("ali", "knows") == ["bob"]\n\n\ndef test_reverse_lookup():\n    store = FactStore()\n    store.add("alice", "knows", "bob")\n    store.add("carol", "knows", "bob")\n    assert store.reverse_lookup("bob", "knows") == ["alice", "carol"]\n\n\ndef test_chain_transitive():\n    store = FactStore()\n    store.add("a", "feeds", "b")\n    store.add("b", "feeds", "c")\n    store.add("c", "feeds", "d")\n    assert store.chain("a", "feeds", max_hops=3) == {"b", "c", "d"}\n    assert store.chain("a", "feeds", max_hops=1) == {"b"}\n    with pytest.raises(ValueError):\n        store.chain("a", "feeds", max_hops=0)\n\n\ndef test_add_validation():\n    store = FactStore()\n    with pytest.raises(ValueError):\n        store.add("", "p", "o")\n    with pytest.raises(ValueError):\n        store.add_alias("", "x")\n\n\ndef test_benchmark_queries_returns_four_patterns():\n    rows = benchmark_queries(n_facts=100, n_queries=10, seed=1)\n    patterns = [r["pattern"] for r in rows]\n    assert patterns == ["direct_lookup", "alias_lookup", "transitive_chain", "reverse_lookup"]\n    for r in rows:\n        assert r["queries"] == 10\n        assert r["seconds"] >= 0.0\n        assert 0.0 <= r["hit_rate"] <= 1.0\n\n\ndef test_benchmark_deterministic_hit_rates():\n    a = benchmark_queries(n_facts=80, n_queries=20, seed=7)\n    b = benchmark_queries(n_facts=80, n_queries=20, seed=7)\n    assert [r["hit_rate"] for r in a] == [r["hit_rate"] for r in b]\n
+"""Tests for KnowledgeBench: fact-store query benchmark."""
+
+import pytest
+
+from knowledgebench import FactStore, benchmark_queries
+
+
+def test_lookup_direct_and_via_alias():
+    store = FactStore()
+    store.add("alice", "knows", "bob")
+    store.add_alias("ali", "alice")
+    assert store.lookup("alice", "knows") == ["bob"]
+    assert store.lookup("ali", "knows") == ["bob"]
+
+
+def test_reverse_lookup():
+    store = FactStore()
+    store.add("alice", "knows", "bob")
+    store.add("carol", "knows", "bob")
+    assert store.reverse_lookup("bob", "knows") == ["alice", "carol"]
+
+
+def test_chain_transitive():
+    store = FactStore()
+    store.add("a", "feeds", "b")
+    store.add("b", "feeds", "c")
+    store.add("c", "feeds", "d")
+    assert store.chain("a", "feeds", max_hops=3) == {"b", "c", "d"}
+    assert store.chain("a", "feeds", max_hops=1) == {"b"}
+    with pytest.raises(ValueError):
+        store.chain("a", "feeds", max_hops=0)
+
+
+def test_add_validation():
+    store = FactStore()
+    with pytest.raises(ValueError):
+        store.add("", "p", "o")
+    with pytest.raises(ValueError):
+        store.add_alias("", "x")
+
+
+def test_benchmark_queries_returns_four_patterns():
+    rows = benchmark_queries(n_facts=100, n_queries=10, seed=1)
+    patterns = [r["pattern"] for r in rows]
+    assert patterns == ["direct_lookup", "alias_lookup", "transitive_chain", "reverse_lookup"]
+    for r in rows:
+        assert r["queries"] == 10
+        assert r["seconds"] >= 0.0
+        assert 0.0 <= r["hit_rate"] <= 1.0
+
+
+def test_benchmark_deterministic_hit_rates():
+    a = benchmark_queries(n_facts=80, n_queries=20, seed=7)
+    b = benchmark_queries(n_facts=80, n_queries=20, seed=7)
+    assert [r["hit_rate"] for r in a] == [r["hit_rate"] for r in b]
